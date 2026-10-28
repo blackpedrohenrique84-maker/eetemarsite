@@ -190,6 +190,27 @@
             text-align: center;
         }
 
+        input[type="url"] {
+            width: 100%;
+            padding: 15px;
+            border: 3px solid var(--pure-black);
+            font-size: 16px;
+            font-family: Arial, sans-serif;
+            background-color: var(--off-white);
+            box-shadow: 4px 4px 0px var(--pure-black);
+        }
+
+        .api-config { margin: 24px 0; }
+        .api-config label {
+            display: block;
+            margin-bottom: 8px;
+            font-family: 'Arial Black', sans-serif;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: var(--blue-deep);
+        }
+        .api-config p { font-family: Arial, sans-serif; font-size: 14px; }
+
         input[type="number"]:focus {
             outline: none;
             background-color: var(--blue-main);
@@ -375,6 +396,13 @@
                        oninput="if(this.value > 20) this.value = 20; if(this.value < 1 && this.value !== '') this.value = 1;">
             </div>
 
+            <div class="api-config">
+                <label for="apiUrl">URL pública da API no Render</label>
+                <input type="url" id="apiUrl" placeholder="https://seu-servico.onrender.com" autocomplete="url">
+                <p>Informe o endereço do serviço Python publicado no Render. Ele fica salvo neste navegador.</p>
+                <button type="button" onclick="salvarUrlApi()">SALVAR URL DA API</button>
+            </div>
+
             <button type="button" onclick="gerarSimulado(false)" id="btnProcessar" disabled>GERAR SIMULADO</button>
             <div id="status" class="status-text blink" style="display: none;"></div>
         </div>
@@ -403,6 +431,31 @@
         let textoExtraido = ""; 
         let tempoSegundos = 0;
         let intervaloTimer = null;
+
+        const apiUrlPadrao = 'https://etemar-edu.onrender.com';
+        const apiUrlSalva = localStorage.getItem('etemarApiUrl') || apiUrlPadrao;
+        document.getElementById('apiUrl').value = apiUrlSalva;
+
+        function salvarUrlApi() {
+            const campo = document.getElementById('apiUrl');
+            try {
+                const url = new URL(campo.value.trim());
+                if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+                localStorage.setItem('etemarApiUrl', url.origin);
+                campo.value = url.origin;
+                campo.setCustomValidity('');
+                document.getElementById('status').classList.remove('blink');
+                document.getElementById('status').innerText = 'URL da API salva neste navegador.';
+                document.getElementById('status').style.display = 'block';
+            } catch {
+                campo.setCustomValidity('Informe uma URL válida, por exemplo https://seu-servico.onrender.com');
+                campo.reportValidity();
+            }
+        }
+
+        function obterUrlApi() {
+            return localStorage.getItem('etemarApiUrl') || apiUrlPadrao;
+        }
 
         document.getElementById('arquivoPDF').addEventListener('change', function(e) {
             const fileName = e.target.files[0]?.name || "INSERIR ARQUIVO PDF";
@@ -463,7 +516,7 @@
                 : `PROCESSANDO ${quantidade} QUESTÕES (AGUARDE)...`;
 
             try {
-                const req = await fetch("http://127.0.0.1:3002/api/simulado", {
+                const req = await fetch(`${obterUrlApi()}/api/simulado`, {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
@@ -473,7 +526,10 @@
                     })
                 });
 
-                if (!req.ok) throw new Error("A IA excedeu o tempo limite.");
+                if (!req.ok) {
+                    const erro = await req.json().catch(() => ({}));
+                    throw new Error(erro.detail || "A API não conseguiu gerar o simulado.");
+                }
                 
                 const dados = await req.json();
                 montarProva(dados);
@@ -606,7 +662,7 @@
                 document.getElementsByName(`q${i}`).forEach(opt => opt.disabled = true);
             });
 
-            fetch("http://127.0.0.1:3002/api/resultado", {
+            fetch(`${obterUrlApi()}/api/resultado`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({temas_certos: temasCertos, temas_errados: temasErrados})
